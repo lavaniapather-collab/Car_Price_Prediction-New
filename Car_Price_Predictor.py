@@ -143,7 +143,23 @@ predict_btn = st.button("Predict Selling Price")
 
 if predict_btn:
     try:
-        pred_lakhs = model.predict(input_data)[0]
+        # 🔍 Align features with what the model was trained on
+        if hasattr(model, "feature_names_in_"):
+            expected_cols = list(model.feature_names_in_)
+            
+            # Add any missing columns with default 0
+            for col in expected_cols:
+                if col not in input_data.columns:
+                    input_data[col] = 0
+
+            # Keep only the expected columns, in the correct order
+            input_for_model = input_data[expected_cols]
+        else:
+            # Fallback if model doesn't store feature names
+            input_for_model = input_data
+
+        # Make prediction in lakhs
+        pred_lakhs = model.predict(input_for_model)[0]
 
         # Convert lakhs → Rands
         pred_rands = pred_lakhs * 100000
