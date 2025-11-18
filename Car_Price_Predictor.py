@@ -17,7 +17,7 @@ def local_css():
 
         .title {
             font-weight: 800 !important;
-            color: #064e3b; 
+            color: #064e3b;
             text-align: center;
             font-size: 48px !important;
         }
@@ -30,7 +30,7 @@ def local_css():
         }
 
         .stButton > button {
-            background-color: #047857 !important; 
+            background-color: #047857 !important;
             color: white !important;
             border-radius: 12px !important;
             padding: 12px 20px !important;
@@ -67,9 +67,9 @@ def local_css():
 
 local_css()
 
-# --------------------------------
+# ------------------------------
 # Load trained regression model
-# --------------------------------
+# ------------------------------
 model_path = "lr_model.pkl"
 
 try:
@@ -79,20 +79,19 @@ except:
     st.error("❌ Model file not found. Please upload lr_model.pkl to your repository.")
     st.stop()
 
-# --------------------------------
+# ------------------------------
 # UI HEADER
-# --------------------------------
+# ------------------------------
 st.markdown("<h1 class='title'>🚗 Used Car Price Predictor (South Africa)</h1>", unsafe_allow_html=True)
 st.markdown("<p class='subtitle'>Estimate the resale value of a car in Rands (R)</p>", unsafe_allow_html=True)
 st.write("")
 
-# --------------------------------
-# INPUT SECTION (Card layout)
-# --------------------------------
+# ------------------------------
+# Input Section
+# ------------------------------
 with st.container():
     st.markdown("<div class='card'>", unsafe_allow_html=True)
 
-    # Updated for Rands
     present_price_rands = st.number_input("Present Price (R)", min_value=0, step=5000)
     kms_driven = st.number_input("Kms Driven", min_value=0, step=500)
     age = st.slider("Age of the Car (Years)", min_value=0, max_value=25, value=5)
@@ -103,24 +102,33 @@ with st.container():
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-# --------------------------------
-# Convert Rands → Lakhs (model expects lakhs)
-# --------------------------------
-# 1 Lakh = 100,000 Rands
-present_price_lakhs = present_price_rands / 100000  
+# ------------------------------
+# Convert Rands → Lakhs
+# ------------------------------
+present_price_lakhs = present_price_rands / 100000
 
-# --------------------------------
-# Encode categorical features
-# --------------------------------
-fuel_petrol = 1 if fuel_type == "Petrol" else 0
-fuel_diesel = 1 if fuel_type == "Diesel" else 0
-fuel_cng = 1 if fuel_type == "CNG" else 0
+# ------------------------------
+# Encode categorical inputs
+# ------------------------------
+fuel_map = {
+    "Petrol": [1, 0, 0],
+    "Diesel": [0, 1, 0],
+    "CNG": [0, 0, 1],
+}
 
-trans_manual = 1 if transmission == "Manual" else 0
-trans_auto = 1 if transmission == "Automatic" else 0
+trans_map = {
+    "Manual": [1, 0],
+    "Automatic": [0, 1],
+}
 
-seller_dealer = 1 if seller_type == "Dealer" else 0
-seller_individual = 1 if seller_type == "Individual" else 0
+seller_map = {
+    "Dealer": [1, 0],
+    "Individual": [0, 1],
+}
+
+fuel_petrol, fuel_diesel, fuel_cng = fuel_map[fuel_type]
+trans_manual, trans_auto = trans_map[transmission]
+seller_dealer, seller_individual = seller_map[seller_type]
 
 # Input DataFrame
 input_data = pd.DataFrame({
@@ -136,34 +144,32 @@ input_data = pd.DataFrame({
     "Seller_Type_Individual": [seller_individual]
 })
 
-# --------------------------------
-# PREDICTION BUTTON
-# --------------------------------
+# ------------------------------
+# Predict Button
+# ------------------------------
 predict_btn = st.button("Predict Selling Price")
 
 if predict_btn:
     try:
-        # 🔍 Align features with what the model was trained on
+        # Ensure correct feature alignment
         if hasattr(model, "feature_names_in_"):
             expected_cols = list(model.feature_names_in_)
-            
-            # Add any missing columns with default 0
             for col in expected_cols:
                 if col not in input_data.columns:
                     input_data[col] = 0
-
-            # Keep only the expected columns, in the correct order
             input_for_model = input_data[expected_cols]
         else:
-            # Fallback if model doesn't store feature names
             input_for_model = input_data
 
-        # Make prediction in lakhs
+        # Predict in lakhs
         pred_lakhs = model.predict(input_for_model)[0]
 
-        # Convert lakhs → Rands
+        # SAFETY CORRECTION — Avoid negative car prices
+        pred_lakhs = max(pred_lakhs, 0.05)  # minimum 0.05 lakhs (R 5,000)
+
+        # Convert to Rands
         pred_rands = pred_lakhs * 100000
-        pred_rands_fmt = f"R {pred_rands:,.2f}"  # Format with commas
+        pred_rands_fmt = f"R {pred_rands:,.2f}"
 
         st.markdown(
             f"""
